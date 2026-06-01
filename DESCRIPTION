@@ -1,0 +1,19 @@
+Package: scRNAseqPlants
+Title: What the Package Does (One Line, Title Case)
+Version: 0.99.0
+Date: 2026-05-31
+Authors@R: 
+    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
+Description: What the package does (one paragraph).
+License: Artistic-2.0
+BugReports: https://support.bioconductor.org/t/scRNAseqPlants
+Imports: 
+    ExperimentHub
+Suggests: 
+    ExperimentHubData,
+    testthat (>= 3.0.0)
+biocViews: ExperimentHub
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 8.0.0
+Config/testthat/edition: 3
