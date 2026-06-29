@@ -1,0 +1,118 @@
+---
+title: "Data processing for Denyer_et_al_2019"
+author: "Vivek Pal"
+date: "2026-05-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+BiocStyle::markdown()
+readRenviron("../../.env")
+```
+
+## Setting directories variables
+
+These directories does not change for different studies
+
+```{r}
+cache_dir <- tools::R_user_dir("scRNAseqPlants", which = "cache")
+data_dir  <- tools::R_user_dir("scRNAseqPlants", which = "data")
+tmp_dir <- tempdir() # ideally fast speed storage such as SSD
+
+fastq_dir <- file.path(cache_dir,"fastq_files")
+starsolo_output_dir <- file.path(cache_dir,"starsolo_output")
+rds_output_dir <- file.path(data_dir, "rds_output")
+
+dir.create(fastq_dir, recursive = T, showWarnings = F)
+dir.create(starsolo_output_dir, recursive = T, showWarnings = F)
+dir.create(rds_output_dir, recursive = T, showWarnings = F)
+
+dir.exists(c(tmp_dir, fastq_dir, starsolo_output_dir, rds_output_dir))
+
+pkg_root <- rprojroot::find_package_root_file()
+```
+
+## Setting system commands and arguments
+
+Commands can be modified as per system capabilities. We used GNU Parallel for parallel processing of multiple samples. Current values were used on a workstation with 64 threads
+
+```{r}
+parallel_arguments <- "-j 10 --colsep ' '"
+parallel_arguments_dryrun <- "-j 10 --dry-run --colsep ' '"
+wget_cmd <- paste0("wget -P ",fastq_dir,"/Wang_et_al_2021_tar/ ", "{}")
+star_solo_command <- "./run_starsolo.sh {1} {2} {3} {4} {5}"
+```
+
+## Setting study specific variables
+
+```{r}
+study_name <- "Wang_et_al_2021"
+# manifest <- read.csv(system.file("extdata", "manifest.csv", package = "scRNAseqPlants"))
+manifest <- read.csv(file.path(pkg_root,"inst","extdata","manifest.csv"))
+meta_data <- manifest[manifest$Study == study_name,]
+samples <- unique(meta_data$SRA_experiment)
+runs_compacted <- meta_data$SRA_runs 
+runs <- unlist(strsplit(runs_compacted, ",\\s*"))
+genome_keyword <- "os"
+chemistry <- "v3"
+```
+
+## downloading originally submitted tar files
+
+
+```{r}
+runs <- meta_data$SRA.run
+runs_url <- meta_data$Download_URL
+downloaded <- runs[sapply(runs, function(run) {
+  file.exists(fastq_dir, pattern = run)
+})]
+pending <- runs[!runs %in% already_downloaded]
+urls <- runs_url[grepl(pattern = paste0(pending,collapse = "|"), runs_url)]
+
+system2("parallel", args = c(parallel_arguments, wget_command), input = urls)
+```
+
+## decompress tar to get fastq
+
+```{r}
+  
+```
+
+
+##  Running star solo 
+
+```{r}
+samples <- unique(meta_data$Original_sample_id)
+
+check_read_length <- function(file) {
+  cmd <- paste0("gunzip -c ", shQuote(file), " | awk 'NR==2{print length($0); exit}'")
+  l <- system(cmd, intern = TRUE)
+  return(as.integer(trimws(l)))
+}
+
+solo_script_input <- sapply(samples, FUN = function(sample){
+  exp <- meta_data[meta_data$Original_sample_id == sample,"SRA_experiment"]
+  sample_runs_files <- list.files(fastq_dir, pattern = paste0("^(", paste0(sample, collapse = "|"), ").*\\.fastq\\.gz$"), full.names = TRUE)
+  sample_runs_files_read_length <- sapply(sample_runs_files, check_read_length)
+  # print(sample_runs_files_read_length) # lengths are consistent
+  reads1 <- paste0(names(sample_runs_files_read_length[sample_runs_files_read_length == 28]),collapse = ",")
+  reads2 <- paste0(names(sample_runs_files_read_length[sample_runs_files_read_length > 90]),collapse = ",")
+  starsolo_output_prefix <- file.path(starsolo_output_dir,study,exp,exp)
+  solo_input <- paste0(c(reads1, reads2, genome_keyword, chemistry, starsolo_output_prefix), collapse = " ")
+  return(solo_input)
+})
+
+system2("parallel", args = c(parallel_arguments, star_solo_command), input = solo_script_input)
+
+```
+
+## make SingleCellExperiment object 
+
+```{r}
+
+
+```
+
+
+
