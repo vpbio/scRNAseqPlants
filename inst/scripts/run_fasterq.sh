@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # =============================================================================
 # fasterq-dump wrapper script
 # Usage: fastq_dump.sh <SRA_run_accession> <tmp_dir> <out_dir>
@@ -9,11 +8,9 @@
 #   $2 - tmp_dir : Temporary directory for fasterq-dump
 #   $3 - out_dir : Output directory for downloaded FASTQ files
 # =============================================================================
-
 RUN=$1
 TMP_DIR=$2
 OUT_DIR=$3
-
 for var in RUN TMP_DIR OUT_DIR; do
     eval val=\$$var
     if [ -z "$val" ]; then
@@ -22,12 +19,11 @@ for var in RUN TMP_DIR OUT_DIR; do
         exit 1
     fi
 done
-
-fasterq-dump \
+"$SRATOOLKIT_BIN/fasterq-dump" \
     -t "$TMP_DIR" \
     --split-files \
     --include-technical \
     -e 10 \
     -O "$OUT_DIR" \
     "$RUN" \
-    && pigz -p 10 "$OUT_DIR/${RUN}"*.fastq
+    && "$PIGZ_BIN" -p 10 "$OUT_DIR/${RUN}"*.fastq
