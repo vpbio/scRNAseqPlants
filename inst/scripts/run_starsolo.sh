@@ -41,10 +41,6 @@ case "$genome_keyword" in
         genome_index="$GENOME_INDEX_OS"
         mt_name="NC_011033.1"
         ;;
-    os_msu7)
-        genome_index="/home/vivek/data/rice_msu7/star_solo_ref"
-        mt_name="Mt"
-        ;;
     at+os)
         genome_index="$GENOME_INDEX_AT_OS"
         mt_name="NC_037304.1 NC_011033.1"
