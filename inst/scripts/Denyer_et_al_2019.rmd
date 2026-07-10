@@ -228,11 +228,9 @@ metadata <- hub_metadata(
 )
 
 add_resource(pkg_root, metadata)
-
 ```
 
 ## session info
 ```{r}
 sessionInfo()
 ```
-
