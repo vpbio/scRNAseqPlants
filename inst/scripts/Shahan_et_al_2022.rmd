@@ -7,7 +7,6 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-BiocStyle::markdown()
 readRenviron("../../.env")
 ```
 
@@ -104,7 +103,7 @@ check_read_length <- function(file) {
     return(as.integer(trimws(l)))
 }
 
-samples <- samples[!samples %in% c("GSM4625994","GSM4625995")] # contains rice root protoplasts as spike-ins
+samples <- samples[!samples %in% c("GSM4625994", "GSM4625995")] # contains rice root protoplasts as spike-ins
 solo_script_input <- sapply(samples, FUN = function(sample) {
     sample_runs <- meta_data[meta_data$GEO_sample == sample, "SRA_runs"]
     sample_runs <- unlist(strsplit(sample_runs, ",\\s*"))
@@ -118,7 +117,7 @@ solo_script_input <- sapply(samples, FUN = function(sample) {
 })
 system2("parallel", args = c(parallel_arguments_dryrun, star_solo_command), input = solo_script_input)
 
-samples <- c("GSM4625994","GSM4625995") # contains rice root protoplasts as spike-ins
+samples <- c("GSM4625994", "GSM4625995") # contains rice root protoplasts as spike-ins
 genome_keyword <- "at+os"
 solo_script_input <- sapply(samples, FUN = function(sample) {
     sample_runs <- meta_data[meta_data$GEO_sample == sample, "SRA_runs"]
@@ -137,56 +136,110 @@ system2("parallel", args = c(parallel_arguments_dryrun, star_solo_command), inpu
 ## make SingleCellExperiment object and metadata for package
 
 ```{r}
-
 suppressPackageStartupMessages(library("Matrix"))
 suppressPackageStartupMessages(library("SingleCellExperiment"))
 
-filtered_sce_list   <- list()
+filtered_sce_list <- list()
 unfiltered_sce_list <- list()
 for (sample in samples) {
-  sample_metadata <- meta_data[meta_data$GEO_sample == sample,]
+    sample_metadata <- meta_data[meta_data$GEO_sample == sample, ]
 
-  filtered_matrices <- list(
-    "counts"    = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Gene","filtered","matrix.mtx")) |> as(Class = "CsparseMatrix"),
-    "spliced"   = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Velocyto","filtered","spliced.mtx")) |> as(Class = "CsparseMatrix"),
-    "unspliced" = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Velocyto","filtered","unspliced.mtx")) |> as(Class = "CsparseMatrix"),
-    "ambiguous" = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Velocyto","filtered","ambiguous.mtx")) |> as(Class = "CsparseMatrix")
-  )
+    filtered_matrices <- list(
+        "counts"    = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "filtered", "matrix.mtx")) |> as(Class = "CsparseMatrix"),
+        "spliced"   = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "filtered", "spliced.mtx")) |> as(Class = "CsparseMatrix"),
+        "unspliced" = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "filtered", "unspliced.mtx")) |> as(Class = "CsparseMatrix"),
+        "ambiguous" = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "filtered", "ambiguous.mtx")) |> as(Class = "CsparseMatrix")
+    )
 
-  barcodes <-  read.table(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Gene","filtered","barcodes.tsv"))
-  barcodes <- cbind(rep(sample,length(barcodes$V1)),barcodes)
-  names(barcodes) <- c("Sample", "Barcode")
-  features <-  read.table(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Gene","filtered","features.tsv"), sep = "\t", quote = "")
-  names(features) <- c("ID", "Symbol", "Type")
+    barcodes <- read.table(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "filtered", "barcodes.tsv"))
+    barcodes <- cbind(rep(sample, length(barcodes$V1)), barcodes)
+    names(barcodes) <- c("Sample", "Barcode")
+    features <- read.table(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "filtered", "features.tsv"), sep = "\t", quote = "")
+    names(features) <- c("ID", "Symbol", "Type")
 
-  filtered_sce <- SingleCellExperiment(filtered_matrices, colData=barcodes, rowData=features, metadata = as.list(sample_metadata))
-  print(dim(filtered_sce))
+    filtered_sce <- SingleCellExperiment(filtered_matrices, colData = barcodes, rowData = features, metadata = as.list(sample_metadata))
+    print(dim(filtered_sce))
 
-  #############################
+    #############################
 
-  unfiltered_matrices <- list(
-    "counts"    = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Gene","raw","matrix.mtx")) |> as(Class = "CsparseMatrix"),
-    "spliced"   = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Velocyto","raw","spliced.mtx")) |> as(Class = "CsparseMatrix"),
-    "unspliced" = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Velocyto","raw","unspliced.mtx")) |> as(Class = "CsparseMatrix"),
-    "ambiguous" = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Velocyto","raw","ambiguous.mtx")) |> as(Class = "CsparseMatrix")
-  )
+    unfiltered_matrices <- list(
+        "counts"    = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "raw", "matrix.mtx")) |> as(Class = "CsparseMatrix"),
+        "spliced"   = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "raw", "spliced.mtx")) |> as(Class = "CsparseMatrix"),
+        "unspliced" = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "raw", "unspliced.mtx")) |> as(Class = "CsparseMatrix"),
+        "ambiguous" = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "raw", "ambiguous.mtx")) |> as(Class = "CsparseMatrix")
+    )
 
-  raw_barcodes <-  read.table(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Gene","raw","barcodes.tsv"))
-  raw_barcodes <- cbind(rep(sample,length(raw_barcodes$V1)),raw_barcodes)
-  names(raw_barcodes) <- c("Sample", "Barcode")
-  raw_features <-  read.table(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Gene","raw","features.tsv"), sep = "\t", quote = "")
-  names(raw_features) <- c("ID", "Symbol", "Type")
+    raw_barcodes <- read.table(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "raw", "barcodes.tsv"))
+    raw_barcodes <- cbind(rep(sample, length(raw_barcodes$V1)), raw_barcodes)
+    names(raw_barcodes) <- c("Sample", "Barcode")
+    raw_features <- read.table(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "raw", "features.tsv"), sep = "\t", quote = "")
+    names(raw_features) <- c("ID", "Symbol", "Type")
 
-  unfiltered_sce <- SingleCellExperiment(unfiltered_matrices, colData=raw_barcodes, rowData=raw_features, metadata = as.list(sample_metadata))
-  print(dim(unfiltered_sce))
+    unfiltered_sce <- SingleCellExperiment(unfiltered_matrices, colData = raw_barcodes, rowData = raw_features, metadata = as.list(sample_metadata))
+    print(dim(unfiltered_sce))
 
-  filtered_sce_list[[sample]]   <- filtered_sce
-  unfiltered_sce_list[[sample]] <- unfiltered_sce
+    filtered_sce_list[[sample]] <- filtered_sce
+    unfiltered_sce_list[[sample]] <- unfiltered_sce
 }
 
 dir.create(file.path(rds_output_dir, study_name), recursive = TRUE, showWarnings = FALSE)
 
-saveRDS(filtered_sce_list, file = file.path(rds_output_dir, study_name, paste0(study_name, "_filtered_sce_list.rds")),  compress = "xz")
-saveRDS(unfiltered_sce_list,  file = file.path(rds_output_dir, study_name, paste0(study_name, "_unfiltered_sce_list.rds")),  compress = "xz")
+saveRDS(filtered_sce_list, file = file.path(rds_output_dir, study_name, paste0(study_name, "_filtered_sce_list.rds")), compress = "xz")
+saveRDS(unfiltered_sce_list, file = file.path(rds_output_dir, study_name, paste0(study_name, "_unfiltered_sce_list.rds")), compress = "xz")
+```
 
+## make metadata.csv for package
+
+```{r}
+suppressPackageStartupMessages(library("HubPub"))
+suppressPackageStartupMessages(library("ExperimentHubData"))
+
+metadata <- hub_metadata(
+    Title = "Shahan_2022_filtered",
+    Description = "filtered counts for scRNA-seq data from 19 arabidopsis root tip samples.",
+    BiocVersion = package_version("3.24"),
+    Genome = "TAIR12",
+    SourceType = "FASTQ",
+    SourceUrl = "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE152766",
+    SourceVersion = "1.0.0",
+    Species = "Arabidopsis thaliana",
+    TaxonomyId = as.integer(3702),
+    Coordinate_1_based = NA,
+    DataProvider = "NCBI",
+    Maintainer = "Vivek Pal <vivek86_sit@jnu.ac.in>",
+    RDataClass = "list",
+    DispatchClass = "Rds",
+    Location_Prefix = "https://zenodo.org/",
+    RDataPath = "records/20976557/files/Shahan_et_al_2022_filtered_sce_list.rds",
+    Tags = "scRNA-seq:arabidopsis:root"
+)
+
+add_resource(pkg_root, metadata)
+
+metadata <- hub_metadata(
+    Title = "Shahan_2022_unfiltered",
+    Description = "unfiltered counts for scRNA-seq data from 19 arabidopsis root tip samples.",
+    BiocVersion = package_version("3.24"),
+    Genome = "TAIR12",
+    SourceType = "FASTQ",
+    SourceUrl = "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE152766",
+    SourceVersion = "1.0.0",
+    Species = "Arabidopsis thaliana",
+    TaxonomyId = as.integer(3702),
+    Coordinate_1_based = NA,
+    DataProvider = "NCBI",
+    Maintainer = "Vivek Pal <vivek86_sit@jnu.ac.in>",
+    RDataClass = "list",
+    DispatchClass = "Rds",
+    Location_Prefix = "https://zenodo.org/",
+    RDataPath = "records/20976557/files/Shahan_et_al_2022_unfiltered_sce_list.rds",
+    Tags = "scRNA-seq:arabidopsis:root"
+)
+
+add_resource(pkg_root, metadata)
+```
+
+## session info
+```{r}
+sessionInfo()
 ```
