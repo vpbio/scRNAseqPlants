@@ -7,7 +7,6 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-BiocStyle::markdown()
 readRenviron("../../.env")
 ```
 
@@ -49,8 +48,7 @@ star_solo_command <- "./run_starsolo.sh {1} {2} {3} {4} {5}"
 
 ```{r}
 study_name <- "Zhu_et_al_2025"
-# manifest <- read.csv(system.file("extdata", "manifest.csv", package = "scRNAseqPlants"))
-manifest <- read.csv(file.path(pkg_root, "inst", "extdata", "manifest.csv"))
+manifest <- read.csv(system.file("extdata", "manifest.csv", package = "scRNAseqPlants"))
 meta_data <- manifest[manifest$Study == study_name, ]
 samples <- unique(meta_data$GEO_sample)
 runs_compacted <- meta_data$SRA_runs
@@ -124,56 +122,110 @@ system2("parallel", args = c(parallel_arguments, star_solo_command), input = sol
 ## make SingleCellExperiment object and metadata for package
 
 ```{r}
-
 suppressPackageStartupMessages(library("Matrix"))
 suppressPackageStartupMessages(library("SingleCellExperiment"))
 
-filtered_sce_list   <- list()
+filtered_sce_list <- list()
 unfiltered_sce_list <- list()
 for (sample in samples) {
-  sample_metadata <- meta_data[meta_data$GEO_sample == sample,]
+    sample_metadata <- meta_data[meta_data$GEO_sample == sample, ]
 
-  filtered_matrices <- list(
-    "counts"    = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Gene","filtered","matrix.mtx")) |> as(Class = "CsparseMatrix"),
-    "spliced"   = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Velocyto","filtered","spliced.mtx")) |> as(Class = "CsparseMatrix"),
-    "unspliced" = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Velocyto","filtered","unspliced.mtx")) |> as(Class = "CsparseMatrix"),
-    "ambiguous" = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Velocyto","filtered","ambiguous.mtx")) |> as(Class = "CsparseMatrix")
-  )
+    filtered_matrices <- list(
+        "counts"    = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "filtered", "matrix.mtx")) |> as(Class = "CsparseMatrix"),
+        "spliced"   = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "filtered", "spliced.mtx")) |> as(Class = "CsparseMatrix"),
+        "unspliced" = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "filtered", "unspliced.mtx")) |> as(Class = "CsparseMatrix"),
+        "ambiguous" = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "filtered", "ambiguous.mtx")) |> as(Class = "CsparseMatrix")
+    )
 
-  barcodes <-  read.table(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Gene","filtered","barcodes.tsv"))
-  barcodes <- cbind(rep(sample,length(barcodes$V1)),barcodes)
-  names(barcodes) <- c("Sample", "Barcode")
-  features <-  read.table(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Gene","filtered","features.tsv"), sep = "\t", quote = "")
-  names(features) <- c("ID", "Symbol", "Type")
+    barcodes <- read.table(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "filtered", "barcodes.tsv"))
+    barcodes <- cbind(rep(sample, length(barcodes$V1)), barcodes)
+    names(barcodes) <- c("Sample", "Barcode")
+    features <- read.table(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "filtered", "features.tsv"), sep = "\t", quote = "")
+    names(features) <- c("ID", "Symbol", "Type")
 
-  filtered_sce <- SingleCellExperiment(filtered_matrices, colData=barcodes, rowData=features, metadata = as.list(sample_metadata))
-  print(dim(filtered_sce))
+    filtered_sce <- SingleCellExperiment(filtered_matrices, colData = barcodes, rowData = features, metadata = as.list(sample_metadata))
+    print(dim(filtered_sce))
 
-  #############################
+    #############################
 
-  unfiltered_matrices <- list(
-    "counts"    = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Gene","raw","matrix.mtx")) |> as(Class = "CsparseMatrix"),
-    "spliced"   = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Velocyto","raw","spliced.mtx")) |> as(Class = "CsparseMatrix"),
-    "unspliced" = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Velocyto","raw","unspliced.mtx")) |> as(Class = "CsparseMatrix"),
-    "ambiguous" = readMM(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Velocyto","raw","ambiguous.mtx")) |> as(Class = "CsparseMatrix")
-  )
+    unfiltered_matrices <- list(
+        "counts"    = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "raw", "matrix.mtx")) |> as(Class = "CsparseMatrix"),
+        "spliced"   = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "raw", "spliced.mtx")) |> as(Class = "CsparseMatrix"),
+        "unspliced" = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "raw", "unspliced.mtx")) |> as(Class = "CsparseMatrix"),
+        "ambiguous" = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "raw", "ambiguous.mtx")) |> as(Class = "CsparseMatrix")
+    )
 
-  raw_barcodes <-  read.table(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Gene","raw","barcodes.tsv"))
-  raw_barcodes <- cbind(rep(sample,length(raw_barcodes$V1)),raw_barcodes)
-  names(raw_barcodes) <- c("Sample", "Barcode")
-  raw_features <-  read.table(file.path(starsolo_output_dir,study_name,sample,paste0(sample,"Solo.out"),"Gene","raw","features.tsv"), sep = "\t", quote = "")
-  names(raw_features) <- c("ID", "Symbol", "Type")
+    raw_barcodes <- read.table(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "raw", "barcodes.tsv"))
+    raw_barcodes <- cbind(rep(sample, length(raw_barcodes$V1)), raw_barcodes)
+    names(raw_barcodes) <- c("Sample", "Barcode")
+    raw_features <- read.table(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "raw", "features.tsv"), sep = "\t", quote = "")
+    names(raw_features) <- c("ID", "Symbol", "Type")
 
-  unfiltered_sce <- SingleCellExperiment(unfiltered_matrices, colData=raw_barcodes, rowData=raw_features, metadata = as.list(sample_metadata))
-  print(dim(unfiltered_sce))
+    unfiltered_sce <- SingleCellExperiment(unfiltered_matrices, colData = raw_barcodes, rowData = raw_features, metadata = as.list(sample_metadata))
+    print(dim(unfiltered_sce))
 
-  filtered_sce_list[[sample]]   <- filtered_sce
-  unfiltered_sce_list[[sample]] <- unfiltered_sce
+    filtered_sce_list[[sample]] <- filtered_sce
+    unfiltered_sce_list[[sample]] <- unfiltered_sce
 }
 
 dir.create(file.path(rds_output_dir, study_name), recursive = TRUE, showWarnings = FALSE)
 
-saveRDS(filtered_sce_list, file = file.path(rds_output_dir, study_name, paste0(study_name, "_filtered_sce_list.rds")),  compress = "xz")
-saveRDS(unfiltered_sce_list,  file = file.path(rds_output_dir, study_name, paste0(study_name, "_unfiltered_sce_list.rds")),  compress = "xz")
+saveRDS(filtered_sce_list, file = file.path(rds_output_dir, study_name, paste0(study_name, "_filtered_sce_list.rds")), compress = "xz")
+saveRDS(unfiltered_sce_list, file = file.path(rds_output_dir, study_name, paste0(study_name, "_unfiltered_sce_list.rds")), compress = "xz")
+```
 
+## make metadata.csv for package
+
+```{r}
+suppressPackageStartupMessages(library("HubPub"))
+suppressPackageStartupMessages(library("ExperimentHubData"))
+
+metadata <- hub_metadata(
+    Title = "Zhu_2025_filtered",
+    Description = "filtered counts for scRNA-seq data from 18 rice root tip samples for cultivars kitaake and X.kitaake. Growing conditions differ between samples.",
+    BiocVersion = package_version("3.24"),
+    Genome = "AGIS1.0",
+    SourceType = "FASTQ",
+    SourceUrl = "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE251706",
+    SourceVersion = "1.0.0",
+    Species = "Oryza sativa",
+    TaxonomyId = as.integer(4530),
+    Coordinate_1_based = NA,
+    DataProvider = "NCBI",
+    Maintainer = "Vivek Pal <vivek86_sit@jnu.ac.in>",
+    RDataClass = "list",
+    DispatchClass = "Rds",
+    Location_Prefix = "https://zenodo.org/",
+    RDataPath = "records/20976557/files/Zhu_et_al_2025_filtered_sce_list.rds",
+    Tags = "scRNA-seq:arabidopsis:root"
+)
+
+add_resource(pkg_root, metadata)
+
+metadata <- hub_metadata(
+    Title = "Zhu_2025_unfiltered",
+    Description = "unfiltered counts for scRNA-seq data from 18 rice root tip samples for cultivars kitaake and X.kitaake. Growing conditions differ between samples.",
+    BiocVersion = package_version("3.24"),
+    Genome = "AGIS1.0",
+    SourceType = "FASTQ",
+    SourceUrl = "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE251706",
+    SourceVersion = "1.0.0",
+    Species = "Oryza sativa",
+    TaxonomyId = as.integer(4530),
+    Coordinate_1_based = NA,
+    DataProvider = "NCBI",
+    Maintainer = "Vivek Pal <vivek86_sit@jnu.ac.in>",
+    RDataClass = "list",
+    DispatchClass = "Rds",
+    Location_Prefix = "https://zenodo.org/",
+    RDataPath = "records/20976557/files/Zhu_et_al_2025_unfiltered_sce_list.rds",
+    Tags = "scRNA-seq:arabidopsis:root"
+)
+
+add_resource(pkg_root, metadata)
+```
+
+## session info
+```{r}
+sessionInfo()
 ```

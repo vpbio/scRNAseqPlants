@@ -1,5 +1,5 @@
 ---
-title: "Data processing for Denyer_et_al_2019"
+title: "Data processing for Wang_et_al_2021"
 author: "Vivek Pal"
 date: "2026-05-30"
 output: html_document
@@ -7,7 +7,6 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-BiocStyle::markdown()
 readRenviron("../../.env")
 ```
 
@@ -17,11 +16,11 @@ These directories does not change for different studies
 
 ```{r}
 cache_dir <- tools::R_user_dir("scRNAseqPlants", which = "cache")
-data_dir  <- tools::R_user_dir("scRNAseqPlants", which = "data")
+data_dir <- tools::R_user_dir("scRNAseqPlants", which = "data")
 tmp_dir <- tempdir() # ideally fast speed storage such as SSD
 
-fastq_dir <- file.path(cache_dir,"fastq_files")
-starsolo_output_dir <- file.path(cache_dir,"starsolo_output")
+fastq_dir <- file.path(cache_dir, "fastq_files")
+starsolo_output_dir <- file.path(cache_dir, "starsolo_output")
 rds_output_dir <- file.path(data_dir, "rds_output")
 
 dir.create(fastq_dir, recursive = T, showWarnings = F)
@@ -40,7 +39,7 @@ Commands can be modified as per system capabilities. We used GNU Parallel for pa
 ```{r}
 parallel_arguments <- "-j 10 --colsep ' '"
 parallel_arguments_dryrun <- "-j 10 --dry-run --colsep ' '"
-wget_cmd <- paste0("wget -P ",fastq_dir,"/Wang_et_al_2021_tar/ ", "{}")
+wget_cmd <- paste0("wget -P ", fastq_dir, "/Wang_et_al_2021_tar/ ", "{}")
 star_solo_command <- "./run_starsolo.sh {1} {2} {3} {4} {5}"
 ```
 
@@ -48,11 +47,10 @@ star_solo_command <- "./run_starsolo.sh {1} {2} {3} {4} {5}"
 
 ```{r}
 study_name <- "Wang_et_al_2021"
-# manifest <- read.csv(system.file("extdata", "manifest.csv", package = "scRNAseqPlants"))
-manifest <- read.csv(file.path(pkg_root,"inst","extdata","manifest.csv"))
-meta_data <- manifest[manifest$Study == study_name,]
+manifest <- read.csv(system.file("extdata", "manifest.csv", package = "scRNAseqPlants"))
+meta_data <- manifest[manifest$Study == study_name, ]
 samples <- unique(meta_data$SRA_experiment)
-runs_compacted <- meta_data$SRA_runs 
+runs_compacted <- meta_data$SRA_runs
 runs <- unlist(strsplit(runs_compacted, ",\\s*"))
 genome_keyword <- "os"
 chemistry <- "v3"
@@ -65,10 +63,10 @@ chemistry <- "v3"
 runs <- meta_data$SRA.run
 runs_url <- meta_data$Download_URL
 downloaded <- runs[sapply(runs, function(run) {
-  file.exists(fastq_dir, pattern = run)
+    file.exists(fastq_dir, pattern = run)
 })]
 pending <- runs[!runs %in% already_downloaded]
-urls <- runs_url[grepl(pattern = paste0(pending,collapse = "|"), runs_url)]
+urls <- runs_url[grepl(pattern = paste0(pending, collapse = "|"), runs_url)]
 
 system2("parallel", args = c(parallel_arguments, wget_command), input = urls)
 ```
@@ -76,7 +74,6 @@ system2("parallel", args = c(parallel_arguments, wget_command), input = urls)
 ## decompress tar to get fastq
 
 ```{r}
-  
 ```
 
 
@@ -86,33 +83,83 @@ system2("parallel", args = c(parallel_arguments, wget_command), input = urls)
 samples <- unique(meta_data$Original_sample_id)
 
 check_read_length <- function(file) {
-  cmd <- paste0("gunzip -c ", shQuote(file), " | awk 'NR==2{print length($0); exit}'")
-  l <- system(cmd, intern = TRUE)
-  return(as.integer(trimws(l)))
+    cmd <- paste0("gunzip -c ", shQuote(file), " | awk 'NR==2{print length($0); exit}'")
+    l <- system(cmd, intern = TRUE)
+    return(as.integer(trimws(l)))
 }
 
-solo_script_input <- sapply(samples, FUN = function(sample){
-  exp <- meta_data[meta_data$Original_sample_id == sample,"SRA_experiment"]
-  sample_runs_files <- list.files(fastq_dir, pattern = paste0("^(", paste0(sample, collapse = "|"), ").*\\.fastq\\.gz$"), full.names = TRUE)
-  sample_runs_files_read_length <- sapply(sample_runs_files, check_read_length)
-  # print(sample_runs_files_read_length) # lengths are consistent
-  reads1 <- paste0(names(sample_runs_files_read_length[sample_runs_files_read_length == 28]),collapse = ",")
-  reads2 <- paste0(names(sample_runs_files_read_length[sample_runs_files_read_length > 90]),collapse = ",")
-  starsolo_output_prefix <- file.path(starsolo_output_dir,study,exp,exp)
-  solo_input <- paste0(c(reads1, reads2, genome_keyword, chemistry, starsolo_output_prefix), collapse = " ")
-  return(solo_input)
+solo_script_input <- sapply(samples, FUN = function(sample) {
+    exp <- meta_data[meta_data$Original_sample_id == sample, "SRA_experiment"]
+    sample_runs_files <- list.files(fastq_dir, pattern = paste0("^(", paste0(sample, collapse = "|"), ").*\\.fastq\\.gz$"), full.names = TRUE)
+    sample_runs_files_read_length <- sapply(sample_runs_files, check_read_length)
+    # print(sample_runs_files_read_length) # lengths are consistent
+    reads1 <- paste0(names(sample_runs_files_read_length[sample_runs_files_read_length == 28]), collapse = ",")
+    reads2 <- paste0(names(sample_runs_files_read_length[sample_runs_files_read_length > 90]), collapse = ",")
+    starsolo_output_prefix <- file.path(starsolo_output_dir, study, exp, exp)
+    solo_input <- paste0(c(reads1, reads2, genome_keyword, chemistry, starsolo_output_prefix), collapse = " ")
+    return(solo_input)
 })
 
 system2("parallel", args = c(parallel_arguments, star_solo_command), input = solo_script_input)
-
 ```
 
 ## make SingleCellExperiment object 
 
 ```{r}
-
-
 ```
 
+## make metadata.csv for package
 
+```{r}
+suppressPackageStartupMessages(library("HubPub"))
+suppressPackageStartupMessages(library("ExperimentHubData"))
 
+metadata <- hub_metadata(
+    Title = "Wang_2021_filtered",
+    Description = "filtered counts for scRNA-seq data from 22 rice samples for cultivar Nip, tissues contain control and treated leaf, root and seedling.",
+    BiocVersion = package_version("3.24"),
+    Genome = "AGIS1.0",
+    SourceType = "FASTQ",
+    SourceUrl = "https://download.cncb.ac.cn/gsa/CRA004082/",
+    SourceVersion = "1.0.0",
+    Species = "Oryza sativa",
+    TaxonomyId = as.integer(4530),
+    Coordinate_1_based = NA,
+    DataProvider = "NGDC",
+    Maintainer = "Vivek Pal <vivek86_sit@jnu.ac.in>",
+    RDataClass = "list",
+    DispatchClass = "Rds",
+    Location_Prefix = "https://zenodo.org/",
+    RDataPath = "records/20976557/files/Wang_et_al_2021_filtered_sce_list.rds",
+    Tags = "scRNA-seq:arabidopsis:root:leaf:seedling"
+)
+
+add_resource(pkg_root, metadata)
+
+metadata <- hub_metadata(
+    Title = "Wang_2021_unfiltered",
+    Description = "unfiltered counts for scRNA-seq data from 22 rice samples for cultivar Nip, tissues contain control and treated leaf, root and seedling.",
+    BiocVersion = package_version("3.24"),
+    Genome = "AGIS1.0",
+    SourceType = "FASTQ",
+    SourceUrl = "https://download.cncb.ac.cn/gsa/CRA004082/",
+    SourceVersion = "1.0.0",
+    Species = "Oryza sativa",
+    TaxonomyId = as.integer(4530),
+    Coordinate_1_based = NA,
+    DataProvider = "NGDC",
+    Maintainer = "Vivek Pal <vivek86_sit@jnu.ac.in>",
+    RDataClass = "list",
+    DispatchClass = "Rds",
+    Location_Prefix = "https://zenodo.org/",
+    RDataPath = "records/20976557/files/Wang_et_al_2021_unfiltered_sce_list.rds",
+    Tags = "scRNA-seq:arabidopsis:root:leaf:seedling"
+)
+
+add_resource(pkg_root, metadata)
+```
+
+## session info
+```{r}
+sessionInfo()
+```
