@@ -2,25 +2,26 @@
 % Please edit documentation in R/scRNAseqPlants-package.R
 \docType{package}
 \name{scRNAseqPlants-package}
-\alias{scRNAseqPlants-package}
 \alias{scRNAseqPlants}
-\title{Title}
+\alias{scRNAseqPlants-package}
+\title{scRNAseqPlants: Collection of Public Single-Cell RNA-Seq Datasets from Plants}
 \description{
-What the package does (one paragraph).
+scRNAseqPlants provides filtered and unfiltered matrices for gene-level counts(exons) as well as velocyto counts(spliced, unspiced, and ambiguous) as SingleCellExperiment objects. Essential Sample-level metadata is also included for any level of re-analysis.
 }
 \seealso{
 Useful links:
 \itemize{
-  \item Report bugs at \url{https://support.bioconductor.org/t/scRNAseqPlants}
+  \item Report bugs at \url{https://github.com/vpbio/scRNAseqPlants/issues}
 }
 
 }
 \author{
-\strong{Maintainer}: First Last \email{first.last@example.com}
+\strong{Maintainer}: Vivek Pal \email{vivek86_sit@jnu.ac.in} (\href{https://orcid.org/0009-0000-1327-0155}{ORCID}) [contributor]
 
 Authors:
 \itemize{
-  \item First Last \email{first.last@example.com}
+  \item Vivek Pal \email{vivek86_sit@jnu.ac.in} (\href{https://orcid.org/0009-0000-1327-0155}{ORCID}) [contributor]
 }
 
 }
+\keyword{internal}
