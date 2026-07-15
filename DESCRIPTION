@@ -7,8 +7,8 @@ Authors@R:
 Description: scRNAseqPlants provides filtered and unfiltered matrices for gene-level counts(exons) as well as velocyto counts(spliced, unspiced, and ambiguous) as SingleCellExperiment objects. Essential Sample-level metadata is also included for any level of re-analysis.  
 License: CC0-1.0
 BugReports: https://github.com/vpbio/scRNAseqPlants/issues
-Imports: 
-    ExperimentHub
+Depends: SingleCellExperiment
+Imports: ExperimentHub
 Suggests: 
     ExperimentHubData,
     testthat (>= 3.0.0)
