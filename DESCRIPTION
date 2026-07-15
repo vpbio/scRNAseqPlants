@@ -1,18 +1,18 @@
 Package: scRNAseqPlants
-Title: What the Package Does (One Line, Title Case)
+Title: Collection of Public Single-Cell RNA-Seq Datasets from Plants
 Version: 0.99.0
 Date: 2026-05-31
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
-License: Artistic-2.0
-BugReports: https://support.bioconductor.org/t/scRNAseqPlants
+    person("Vivek", "Pal", "Vivek86_sit@jnu.ac.in", role = c("aut", "cre", "ctb"))
+Description: scRNAseqPlants provides filtered and unfiltered matrices for gene-level counts(exons) as well as velocyto counts(spliced, unspiced, and ambiguous) as SingleCellExperiment objects. Essential Sample-level metadata is also included for any level of re-analysis.  
+License: CC0-1.0
+BugReports: https://github.com/vpbio/scRNAseqPlants/issues
 Imports: 
     ExperimentHub
 Suggests: 
     ExperimentHubData,
     testthat (>= 3.0.0)
-biocViews: ExperimentHub
+biocViews: ExperimentHub,ExperimentData,ExpressionData,Tissue,SingleCellData,Arabidopsis_thaliana_Data,Oryza_sativa_Data,ReproducibleResearch,GEO
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 8.0.0
