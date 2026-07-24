@@ -5,12 +5,24 @@ date: "2026-05-30"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{r setup, eval=TRUE}
 knitr::opts_chunk$set(echo = TRUE)
-readRenviron("../../.env")
 ```
 
-## Setting directories variables
+## Setup system variables for external tools
+
+We used a .env file to setup external tools such as STAR, CellRanger(for whitelist file) and genome indexes location. An .env.example file is provided for users who want to reproduce the steps in this workflow.
+
+```{r}
+env_file <- file.path(rprojroot::find_package_root_file(), ".env")
+if (file.exists(env_file)) {
+    readRenviron(env_file)
+} else {
+    message("`.env` file not found at: ", env_file, "\nSystem environment variables will not be used.")
+}
+```
+
+## Setting directories as variables
 
 These directories does not change for different studies
 
@@ -23,9 +35,9 @@ fastq_dir <- file.path(cache_dir, "fastq_files")
 starsolo_output_dir <- file.path(cache_dir, "starsolo_output")
 rds_output_dir <- file.path(data_dir, "rds_output")
 
-dir.create(fastq_dir, recursive = T, showWarnings = F)
-dir.create(starsolo_output_dir, recursive = T, showWarnings = F)
-dir.create(rds_output_dir, recursive = T, showWarnings = F)
+dir.create(fastq_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(starsolo_output_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(rds_output_dir, recursive = TRUE, showWarnings = FALSE)
 
 dir.exists(c(tmp_dir, fastq_dir, starsolo_output_dir, rds_output_dir))
 
@@ -34,90 +46,142 @@ pkg_root <- rprojroot::find_package_root_file()
 
 ## Setting system commands and arguments
 
-Commands can be modified as per system capabilities. We used GNU Parallel for parallel processing of multiple samples. Current values were used on a workstation with 64 threads
+Commands can be modified as per system capabilities. We used GNU Parallel for parallel processing of multiple samples. Current values were used on a workstation with 64 threads. In this document we used parallel_arguments_dryrun in system2() calls, for actual execution use parallel_arguments. run_starsolo.sh is included in the inst/scripts directory.
 
 ```{r}
-parallel_arguments <- "-j 10 --colsep ' '"
-parallel_arguments_dryrun <- "-j 10 --dry-run --colsep ' '"
+parallel_arguments <- "-j 10 --colsep '\\|'"
+parallel_arguments_dryrun <- "-j 10 --dry-run --colsep '\\|'"
 wget_cmd <- paste0("wget -P ", fastq_dir, "/Wang_et_al_2021_tar/ ", "{}")
+untar_cmd <- paste0("tar -xvf ", "{}", " -C ", fastq_dir)
 star_solo_command <- "./run_starsolo.sh {1} {2} {3} {4} {5}"
 ```
 
 ## Setting study specific variables
 
-```{r}
+```{r, eval=FALSE}
 study_name <- "Wang_et_al_2021"
 manifest <- read.csv(system.file("extdata", "manifest.csv", package = "scRNAseqPlants"))
 meta_data <- manifest[manifest$Study == study_name, ]
 samples <- unique(meta_data$SRA_experiment)
+samples_name <- unique(meta_data$Original_sample_id)
 runs_compacted <- meta_data$SRA_runs
 runs <- unlist(strsplit(runs_compacted, ",\\s*"))
 genome_keyword <- "os"
 chemistry <- "v3"
 ```
 
-## downloading originally submitted tar files
+## Downloading originally submitted tar files
 
-
-```{r}
-runs <- meta_data$SRA.run
-runs_url <- meta_data$Download_URL
+We downloaded the tarballs using ftp links available at https://ngdc.cncb.ac.cn/gsa/browse/CRA004082
+```{r, eval=FALSE}
+runs_url_compacted <- meta_data$Download_URL
+runs_url <- unlist(strsplit(runs_url_compacted, ",\\s*"))
 downloaded <- runs[sapply(runs, function(run) {
-    file.exists(fastq_dir, pattern = run)
+    length(list.files(file.path(fastq_dir, "Wang_et_al_2021_tar"), pattern = run)) > 0
 })]
-pending <- runs[!runs %in% already_downloaded]
+pending <- runs[!runs %in% downloaded]
 urls <- runs_url[grepl(pattern = paste0(pending, collapse = "|"), runs_url)]
 
-system2("parallel", args = c(parallel_arguments, wget_command), input = urls)
+system2("parallel", args = c(parallel_arguments_dryrun, wget_cmd), input = urls)
 ```
 
-## decompress tar to get fastq
+## Decompress tar to get fastq files
 
-```{r}
+```{r, eval=FALSE}
+tars <- list.files(path = file.path(fastq_dir, "Wang_et_al_2021_tar"), full.names = TRUE)
+
+system2("parallel", args = c(parallel_arguments_dryrun, untar_cmd), input = tars)
 ```
 
 
 ##  Running star solo 
 
-```{r}
-samples <- unique(meta_data$Original_sample_id)
-
+```{r, eval=FALSE}
 check_read_length <- function(file) {
     cmd <- paste0("gunzip -c ", shQuote(file), " | awk 'NR==2{print length($0); exit}'")
     l <- system(cmd, intern = TRUE)
     return(as.integer(trimws(l)))
 }
 
-solo_script_input <- sapply(samples, FUN = function(sample) {
+solo_script_input <- sapply(samples_name, FUN = function(sample) {
     exp <- meta_data[meta_data$Original_sample_id == sample, "SRA_experiment"]
     sample_runs_files <- list.files(fastq_dir, pattern = paste0("^(", paste0(sample, collapse = "|"), ").*\\.fastq\\.gz$"), full.names = TRUE)
     sample_runs_files_read_length <- sapply(sample_runs_files, check_read_length)
-    # print(sample_runs_files_read_length) # lengths are consistent
+    # print(sample_runs_files_read_length) # consistent lengths
     reads1 <- paste0(names(sample_runs_files_read_length[sample_runs_files_read_length == 28]), collapse = ",")
-    reads2 <- paste0(names(sample_runs_files_read_length[sample_runs_files_read_length > 90]), collapse = ",")
-    starsolo_output_prefix <- file.path(starsolo_output_dir, study, exp, exp)
-    solo_input <- paste0(c(reads1, reads2, genome_keyword, chemistry, starsolo_output_prefix), collapse = " ")
+    reads2 <- paste0(names(sample_runs_files_read_length[sample_runs_files_read_length >= 90]), collapse = ",")
+    starsolo_output_prefix <- file.path(starsolo_output_dir, study_name, exp, exp)
+    solo_input <- paste0(c(reads1, reads2, genome_keyword, chemistry, starsolo_output_prefix), collapse = "|")
     return(solo_input)
 })
 
-system2("parallel", args = c(parallel_arguments, star_solo_command), input = solo_script_input)
+system2("parallel", args = c(parallel_arguments_dryrun, star_solo_command), input = solo_script_input)
 ```
 
-## make SingleCellExperiment object 
+## Make SingleCellExperiment object and save RDS for package
 
-```{r}
+```{r, eval=FALSE}
+suppressPackageStartupMessages(library("Matrix"))
+suppressPackageStartupMessages(library("SingleCellExperiment"))
+
+filtered_sce_list <- list()
+unfiltered_sce_list <- list()
+for (sample in samples) {
+    sample_metadata <- meta_data[meta_data$SRA_experiment == sample, ]
+
+    filtered_matrices <- list(
+        "counts"    = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "filtered", "matrix.mtx")) |> as(Class = "CsparseMatrix"),
+        "spliced"   = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "filtered", "spliced.mtx")) |> as(Class = "CsparseMatrix"),
+        "unspliced" = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "filtered", "unspliced.mtx")) |> as(Class = "CsparseMatrix"),
+        "ambiguous" = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "filtered", "ambiguous.mtx")) |> as(Class = "CsparseMatrix")
+    )
+
+    barcodes <- read.table(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "filtered", "barcodes.tsv"))
+    barcodes <- cbind(rep(sample, length(barcodes$V1)), barcodes)
+    names(barcodes) <- c("Sample", "Barcode")
+    features <- read.table(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "filtered", "features.tsv"), sep = "\t", quote = "")
+    names(features) <- c("ID", "Symbol", "Type")
+
+    filtered_sce <- SingleCellExperiment(filtered_matrices, colData = barcodes, rowData = features, metadata = as.list(sample_metadata))
+    print(dim(filtered_sce))
+
+    #############################
+
+    unfiltered_matrices <- list(
+        "counts"    = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "raw", "matrix.mtx")) |> as(Class = "CsparseMatrix"),
+        "spliced"   = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "raw", "spliced.mtx")) |> as(Class = "CsparseMatrix"),
+        "unspliced" = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "raw", "unspliced.mtx")) |> as(Class = "CsparseMatrix"),
+        "ambiguous" = readMM(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Velocyto", "raw", "ambiguous.mtx")) |> as(Class = "CsparseMatrix")
+    )
+
+    raw_barcodes <- read.table(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "raw", "barcodes.tsv"))
+    raw_barcodes <- cbind(rep(sample, length(raw_barcodes$V1)), raw_barcodes)
+    names(raw_barcodes) <- c("Sample", "Barcode")
+    raw_features <- read.table(file.path(starsolo_output_dir, study_name, sample, paste0(sample, "Solo.out"), "Gene", "raw", "features.tsv"), sep = "\t", quote = "")
+    names(raw_features) <- c("ID", "Symbol", "Type")
+
+    unfiltered_sce <- SingleCellExperiment(unfiltered_matrices, colData = raw_barcodes, rowData = raw_features, metadata = as.list(sample_metadata))
+    print(dim(unfiltered_sce))
+
+    filtered_sce_list[[sample]] <- filtered_sce
+    unfiltered_sce_list[[sample]] <- unfiltered_sce
+}
+
+dir.create(file.path(rds_output_dir, study_name), recursive = TRUE, showWarnings = FALSE)
+
+saveRDS(filtered_sce_list, file = file.path(rds_output_dir, study_name, paste0(study_name, "_filtered_sce_list.rds")), compress = "xz")
+saveRDS(unfiltered_sce_list, file = file.path(rds_output_dir, study_name, paste0(study_name, "_unfiltered_sce_list.rds")), compress = "xz")
 ```
 
-## make metadata.csv for package
+## Make metadata.csv for package
 
-```{r}
+```{r, eval=FALSE}
 suppressPackageStartupMessages(library("HubPub"))
-suppressPackageStartupMessages(library("ExperimentHubData"))
 
 metadata <- hub_metadata(
     Title = "Wang_2021_filtered",
     Description = "filtered counts for scRNA-seq data from 22 rice samples for cultivar Nip, tissues contain control and treated leaf, root and seedling.",
-    BiocVersion = package_version("3.24"),
+    BiocVersion = BiocManager::version(),
     Genome = "AGIS1.0",
     SourceType = "FASTQ",
     SourceUrl = "https://download.cncb.ac.cn/gsa/CRA004082/",
@@ -131,7 +195,7 @@ metadata <- hub_metadata(
     DispatchClass = "Rds",
     Location_Prefix = "https://zenodo.org/",
     RDataPath = "records/20976557/files/Wang_et_al_2021_filtered_sce_list.rds",
-    Tags = "scRNA-seq:arabidopsis:root:leaf:seedling"
+    Tags = "scRNA-seq:rice:root:leaf:seedling"
 )
 
 add_resource(pkg_root, metadata)
@@ -139,7 +203,7 @@ add_resource(pkg_root, metadata)
 metadata <- hub_metadata(
     Title = "Wang_2021_unfiltered",
     Description = "unfiltered counts for scRNA-seq data from 22 rice samples for cultivar Nip, tissues contain control and treated leaf, root and seedling.",
-    BiocVersion = package_version("3.24"),
+    BiocVersion = BiocManager::version(),
     Genome = "AGIS1.0",
     SourceType = "FASTQ",
     SourceUrl = "https://download.cncb.ac.cn/gsa/CRA004082/",
@@ -153,13 +217,15 @@ metadata <- hub_metadata(
     DispatchClass = "Rds",
     Location_Prefix = "https://zenodo.org/",
     RDataPath = "records/20976557/files/Wang_et_al_2021_unfiltered_sce_list.rds",
-    Tags = "scRNA-seq:arabidopsis:root:leaf:seedling"
+    Tags = "scRNA-seq:rice:root:leaf:seedling"
 )
 
 add_resource(pkg_root, metadata)
 ```
 
 ## session info
+Note: packages below are loaded conditionally in eval=FALSE chunks.
+sessionInfo() reflects the minimal environment for knitting this document.
 ```{r}
 sessionInfo()
 ```

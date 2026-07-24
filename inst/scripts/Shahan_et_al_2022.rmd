@@ -5,12 +5,24 @@ date: "2026-05-30"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{r setup, eval=TRUE}
 knitr::opts_chunk$set(echo = TRUE)
-readRenviron("../../.env")
 ```
 
-## Setting directories variables
+## Setup system variables for external tools
+
+We used a .env file to setup external tools such as SRA toolkit, pigz(for fast compression), STAR, CellRanger(for whitelist file) and genome indexes location. An .env.example file is provided for users who want to reproduce the steps in this workflow.
+
+```{r}
+env_file <- file.path(rprojroot::find_package_root_file(), ".env")
+if (file.exists(env_file)) {
+    readRenviron(env_file)
+} else {
+    message("`.env` file not found at: ", env_file, "\nSystem environment variables will not be used.")
+}
+```
+
+## Setting directories as variables
 
 These directories does not change for different studies
 
@@ -23,9 +35,9 @@ fastq_dir <- file.path(cache_dir, "fastq_files")
 starsolo_output_dir <- file.path(cache_dir, "starsolo_output")
 rds_output_dir <- file.path(data_dir, "rds_output")
 
-dir.create(fastq_dir, recursive = T, showWarnings = F)
-dir.create(starsolo_output_dir, recursive = T, showWarnings = F)
-dir.create(rds_output_dir, recursive = T, showWarnings = F)
+dir.create(fastq_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(starsolo_output_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(rds_output_dir, recursive = TRUE, showWarnings = FALSE)
 
 dir.exists(c(tmp_dir, fastq_dir, starsolo_output_dir, rds_output_dir))
 
@@ -34,12 +46,12 @@ pkg_root <- rprojroot::find_package_root_file()
 
 ## Setting system commands and arguments
 
-Commands can be modified as per system capabilities. We used GNU Parallel for parallel processing of multiple samples. Current values were used on a workstation with 64 threads
+Commands can be modified as per system capabilities. We used GNU Parallel for parallel processing of multiple samples. Current values were used on a workstation with 64 threads. In this document we used parallel_arguments_dryrun in system2() calls, for actual execution use parallel_arguments. run_fasterq.sh and run_starsolo.sh are included in the inst/scripts directory
 
 ```{r}
 parallel_arguments <- "-j 10 --colsep ' '"
 parallel_arguments_dryrun <- "-j 10 --dry-run --colsep ' '"
-prefetch_command <- "prefetch -p --max-size 60G"
+prefetch_command <- paste0(file.path(Sys.getenv("SRATOOLKIT_BIN"), "prefetch"), " -p --max-size 60G")
 fasterq_command <- "./run_fasterq.sh {1} {2} {3}"
 star_solo_command <- "./run_starsolo.sh {1} {2} {3} {4} {5}"
 ```
@@ -48,8 +60,7 @@ star_solo_command <- "./run_starsolo.sh {1} {2} {3} {4} {5}"
 
 ```{r}
 study_name <- "Shahan_et_al_2022"
-# manifest <- read.csv(system.file("extdata", "manifest.csv", package = "scRNAseqPlants"))
-manifest <- read.csv(file.path(pkg_root, "inst", "extdata", "manifest.csv"))
+manifest <- read.csv(system.file("extdata", "manifest.csv", package = "scRNAseqPlants"))
 meta_data <- manifest[manifest$Study == study_name, ]
 samples <- unique(meta_data$GEO_sample)
 runs_compacted <- meta_data$SRA_runs
@@ -58,15 +69,19 @@ genome_keyword <- "at"
 chemistry <- "v3"
 ```
 
-## Runing prefetch 
+## Running prefetch 
 
-```{r}
+We downloaded the .sra run files using NCBI's SRA Toolkit. Path to sra toolkit should be specified in .env file
+
+```{r, eval=FALSE}
 system2("parallel", args = c(parallel_arguments_dryrun, prefetch_command), input = runs)
 ```
 
 ## Running fasterq-dump
 
-```{r}
+When setup correctly, fasterq-dump should automatically find the prefetched runs.
+
+```{r, eval=FALSE}
 downloaded <- runs[sapply(runs, function(run) {
     length(list.files(fastq_dir, pattern = paste0("^", run, ".*\\.fastq\\.gz"))) > 0
 })]
@@ -94,21 +109,40 @@ message("files downloaded : ", sapply(runs, function(run) list.files(fastq_dir, 
 
 ##  Running star solo 
 
-add description about runs with read1 = 26, those reads were skipped, checked in output also
+Some of the runs (initial low depth sequencing runs intended for library quality check) contatined Read1 with only 26 cycles despite being from 10xV3 chemistry, we excluded those runs completely to keep robustness. The total contribution of these runs were 1-2% among all sequencing runs for that sample.
 
-```{r}
+Remove (rename) run files with Read1 length = 26
+```{r, eval=FALSE}
 check_read_length <- function(file) {
     cmd <- paste0("gunzip -c ", shQuote(file), " | awk 'NR==2{print length($0); exit}'")
     l <- system(cmd, intern = TRUE)
     return(as.integer(trimws(l)))
 }
 
-samples <- samples[!samples %in% c("GSM4625994", "GSM4625995")] # contains rice root protoplasts as spike-ins
+## remove (rename) run files with Read1 length = 26
+all_files_read_length <- list.files(fastq_dir, pattern = paste0("^(", paste0(runs, collapse = "|"), ").*\\.fastq\\.gz$"), full.names = TRUE) |>
+    sapply(X = _, check_read_length)
+# print(all_files_read_length) # inconsistent R1 length despite 10xV3 chemistry
+runs_with_26 <- sub("_.*", "", basename(names(all_files_read_length[all_files_read_length == 26])))
+runs_with_26_files <- list.files(fastq_dir, pattern = paste0("^(", paste0(runs_with_26, collapse = "|"), ").*\\.fastq\\.gz$"), full.names = TRUE)
+# file.rename(from = runs_with_26_files, to = paste0(runs_with_26_files,".dont_use")) # ran one time
+```
+
+Now running STAR, renamed read files will not come in pattern matching
+```{r, eval=FALSE}
+check_read_length <- function(file) {
+    cmd <- paste0("gunzip -c ", shQuote(file), " | awk 'NR==2{print length($0); exit}'")
+    l <- system(cmd, intern = TRUE)
+    return(as.integer(trimws(l)))
+}
+
+samples <- samples[!samples %in% c("GSM4625994", "GSM4625995")] # doesn't contains rice root protoplasts as spike-ins
 solo_script_input <- sapply(samples, FUN = function(sample) {
     sample_runs <- meta_data[meta_data$GEO_sample == sample, "SRA_runs"]
     sample_runs <- unlist(strsplit(sample_runs, ",\\s*"))
     sample_runs_files <- list.files(fastq_dir, pattern = paste0("^(", paste0(sample_runs, collapse = "|"), ").*\\.fastq\\.gz$"), full.names = TRUE)
     sample_runs_files_read_length <- sapply(sample_runs_files, check_read_length)
+    # print(sample_runs_files_read_length) # consistent lengths
     reads1 <- paste0(names(sample_runs_files_read_length[sample_runs_files_read_length == 28]), collapse = ",")
     reads2 <- paste0(names(sample_runs_files_read_length[sample_runs_files_read_length >= 90]), collapse = ",")
     starsolo_output_prefix <- file.path(starsolo_output_dir, study_name, sample, sample)
@@ -133,14 +167,16 @@ solo_script_input <- sapply(samples, FUN = function(sample) {
 system2("parallel", args = c(parallel_arguments_dryrun, star_solo_command), input = solo_script_input)
 ```
 
-## make SingleCellExperiment object and metadata for package
+## Make SingleCellExperiment object and save RDS for package
 
-```{r}
+```{r, eval=FALSE}
 suppressPackageStartupMessages(library("Matrix"))
 suppressPackageStartupMessages(library("SingleCellExperiment"))
 
+samples <- unique(meta_data$GEO_sample)
 filtered_sce_list <- list()
 unfiltered_sce_list <- list()
+
 for (sample in samples) {
     sample_metadata <- meta_data[meta_data$GEO_sample == sample, ]
 
@@ -188,16 +224,15 @@ saveRDS(filtered_sce_list, file = file.path(rds_output_dir, study_name, paste0(s
 saveRDS(unfiltered_sce_list, file = file.path(rds_output_dir, study_name, paste0(study_name, "_unfiltered_sce_list.rds")), compress = "xz")
 ```
 
-## make metadata.csv for package
+## Make metadata.csv for package
 
-```{r}
+```{r, eval=FALSE}
 suppressPackageStartupMessages(library("HubPub"))
-suppressPackageStartupMessages(library("ExperimentHubData"))
 
 metadata <- hub_metadata(
     Title = "Shahan_2022_filtered",
     Description = "filtered counts for scRNA-seq data from 19 arabidopsis root tip samples.",
-    BiocVersion = package_version("3.24"),
+    BiocVersion = BiocManager::version(),
     Genome = "TAIR12",
     SourceType = "FASTQ",
     SourceUrl = "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE152766",
@@ -219,7 +254,7 @@ add_resource(pkg_root, metadata)
 metadata <- hub_metadata(
     Title = "Shahan_2022_unfiltered",
     Description = "unfiltered counts for scRNA-seq data from 19 arabidopsis root tip samples.",
-    BiocVersion = package_version("3.24"),
+    BiocVersion = BiocManager::version(),
     Genome = "TAIR12",
     SourceType = "FASTQ",
     SourceUrl = "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE152766",
@@ -240,6 +275,8 @@ add_resource(pkg_root, metadata)
 ```
 
 ## session info
+Note: packages below are loaded conditionally in eval=FALSE chunks.
+sessionInfo() reflects the minimal environment for knitting this document.
 ```{r}
 sessionInfo()
 ```

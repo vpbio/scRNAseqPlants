@@ -1,11 +1,12 @@
-context("metadata validity")
+test_that("metadata is valid", {
+  if (!requireNamespace("ExperimentHubData", quietly = TRUE))
+    skip("ExperimentHubData not available")
 
-test_that("metadata is valid",
-{
-    if(!requireNamespace("ExperimentHubData", quietly = TRUE))
-        BiocManager::install("ExperimentHubData")
+  path <- find.package("scRNAseqPlants")
+  metadata <- system.file("extdata", "metadata.csv", package = "scRNAseqPlants")
 
-    path <- find.package("")
-    metadata <- system.file("extdata", "metadata.csv", package = "scRNAseqPlants")
-    expect_true(ExperimentHubData::makeExperimentHubMetadata(path, metadata))
+  expect_s4_class(
+    ExperimentHubData::makeExperimentHubMetadata(path, metadata),
+    "list"
+  )
 })
